@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 '''
 Copyright 2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 
@@ -7,7 +8,7 @@ Licensed under the Apache License, Version 2.0 (the "License"). You may not use 
 
 or in the "license" file accompanying this file. This file is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
 '''
-
+from __future__ import print_function
 import sys
 import irc.bot
 import requests
@@ -18,21 +19,23 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
         self.token = token
         self.channel = '#' + channel
 
+        self.web = requests.Session()
+        self.web.headers.update(headers = {'Client-ID': self.client_id, 'Accept': 'application/vnd.twitchtv.v5+json'})
+        
         # Get the channel id, we will need this for v5 API calls
         url = 'https://api.twitch.tv/kraken/users?login=' + channel
-        headers = {'Client-ID': client_id, 'Accept': 'application/vnd.twitchtv.v5+json'}
-        r = requests.get(url, headers=headers).json()
+        r = self.web.get(url).json()
         self.channel_id = r['users'][0]['_id']
 
         # Create IRC bot connection
         server = 'irc.chat.twitch.tv'
         port = 6667
-        print 'Connecting to ' + server + ' on port ' + str(port) + '...'
+        print('Connecting to ' + server + ' on port ' + str(port) + '...')
         irc.bot.SingleServerIRCBot.__init__(self, [(server, port, 'oauth:'+token)], username, username)
         
 
     def on_welcome(self, c, e):
-        print 'Joining ' + self.channel
+        print('Joining ' + self.channel)
 
         # You must request specific capabilities before you can use them
         c.cap('REQ', ':twitch.tv/membership')
@@ -45,9 +48,8 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
         # If a chat message starts with an exclamation point, try to run it as a command
         if e.arguments[0][:1] == '!':
             cmd = e.arguments[0].split(' ')[0][1:]
-            print 'Received command: ' + cmd
+            print('Received command: ' + cmd)
             self.do_command(e, cmd)
-        return
 
     def do_command(self, e, cmd):
         c = self.connection
@@ -55,15 +57,14 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
         # Poll the API to get current game.
         if cmd == "game":
             url = 'https://api.twitch.tv/kraken/channels/' + self.channel_id
-            headers = {'Client-ID': self.client_id, 'Accept': 'application/vnd.twitchtv.v5+json'}
-            r = requests.get(url, headers=headers).json()
+            r = self.web.get(url).json()
             c.privmsg(self.channel, r['display_name'] + ' is currently playing ' + r['game'])
 
         # Poll the API the get the current status of the stream
         elif cmd == "title":
             url = 'https://api.twitch.tv/kraken/channels/' + self.channel_id
-            headers = {'Client-ID': self.client_id, 'Accept': 'application/vnd.twitchtv.v5+json'}
-            r = requests.get(url, headers=headers).json()
+            
+            r = self.web.get(url, headers=headers).json()
             c.privmsg(self.channel, r['display_name'] + ' channel title is currently ' + r['status'])
 
         # Provide basic information to viewers for specific commands
